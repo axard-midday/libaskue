@@ -7,20 +7,6 @@
 
 #include "cli.h"
 
-// выделить длинную опцию
-static
-size_t cli_get_long_option_len ( const char *argv )
-{
-    size_t len = strlen ( argv ) - 1;
-    while ( len > 0 && argv[ len ] != '=' )
-    {
-        len--;
-    }
-    len -= 2; // отсечь знак "--"
-    
-    return len;
-}
-
 // тип опции
 static
 cli_arg_type_t get_argtype ( const char *arg )
@@ -45,40 +31,6 @@ cli_arg_type_t get_argtype ( const char *arg )
     else
     {
         return CLI_UNKNOW_ARG;
-    }
-}
-
-// получить аргумент для короткой опции
-static
-const char* get_short_opt_arg ( int *index, int argc, char **argv )
-{
-    int _i = *index;
-    if ( ( _i + 1 ) < argc &&
-         get_argtype ( argv[ _i + 1 ] ) == CLI_UNKNOW_ARG )
-    {
-        *index += 2;
-        return argv[ _i + 1 ];
-    }
-    else
-    {
-        *index += 1;
-        return NULL;
-    }
-}
-
-// получить аргумент для длинной опции
-static
-const char* get_long_opt_arg ( const char *argv )
-{
-    const char *argument = strchr ( argv, '=' );
-    
-    if ( argument != NULL )
-    {
-        return argument + 1;
-    }
-    else
-    {
-        return argument;
     }
 }
 

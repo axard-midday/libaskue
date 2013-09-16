@@ -22,7 +22,33 @@
 #include <errno.h>
 #include <string.h>
 
-#include "rs232.h"
+//#include "rs232.h"
+
+static
+const char* rs232_speed[] =
+{
+	"0",
+	"50",
+	"75",
+	"110",
+	"134",
+	"150",
+	"200",
+	"300",
+	"600",
+	"1200",
+	"1800",
+	"2400",
+	"4800",
+	"9600",
+	"19200",
+	"38400",
+	"57600",
+	"115200",
+	"230400",
+	NULL
+};
+
 
 #define speed_str_array rs232_speed
 static

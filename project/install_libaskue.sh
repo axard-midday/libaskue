@@ -14,30 +14,30 @@ fi
 
 cp ../bin/libaskue.h /usr/local/include/libaskue.h
 
-if [ -f "/usr/local/lib/libaskue.so.2.0.0" ]
+if [ -f "/usr/local/lib/libaskue.so.2.0.3" ]
 then
-    rm -f "/usr/local/lib/libaskue.so.2.0.0"
+    rm -f "/usr/local/lib/libaskue.so.2.0.3"
 fi
 
-cp ../bin/libaskue.so.2.0.0 /usr/local/lib/libaskue.so.2.0.0
+cp ../bin/libaskue.so.2.0.3 /usr/local/lib/libaskue.so.2.0.3
 
 if [ -f "/usr/local/lib/libaskue.so.2.0" ]
 then
     rm -f "/usr/local/lib/libaskue.so.2.0"
 fi
 
-ln -s /usr/local/lib/libaskue.so.2.0.0 /usr/local/lib/libaskue.so.2.0 
+ln -s /usr/local/lib/libaskue.so.2.0.3 /usr/local/lib/libaskue.so.2.0 
 
 if [ -f "/usr/local/lib/libaskue.so.2" ]
 then
     rm -f "/usr/local/lib/libaskue.so.2"
 fi
 
-ln -s /usr/local/lib/libaskue.so.2.0.0 /usr/local/lib/libaskue.so.2
+ln -s /usr/local/lib/libaskue.so.2.0.3 /usr/local/lib/libaskue.so.2
 
 if [ -f "/usr/local/lib/libaskue.so" ]
 then
     rm -f "/usr/local/lib/libaskue.so"
 fi
 
-ln -s /usr/local/lib/libaskue.so.2.0.0 /usr/local/lib/libaskue.so 
+ln -s /usr/local/lib/libaskue.so.2.0.3 /usr/local/lib/libaskue.so 

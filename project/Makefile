@@ -1,10 +1,10 @@
 # 
-# Сборка для libaskue 2.0.0
+# Сборка для libaskue 2.0.3
 #
 
 project_name := libaskue
 majorVersion := 2
-minorVersion := 0.0
+minorVersion := 0.3
 fullVersion := $(majorVersion).$(minorVersion)
 source_dirs := ../src
 dest_dir := ../bin
@@ -15,7 +15,7 @@ object_files := $(notdir $(source_files))
 object_files := $(object_files:.c=.o)
 
 link_flags := -lsqlite3
-compile_flags := -std=c99 -fPIC 
+compile_flags := -std=c99 -fPIC -Wall
 soname_flag := -Wl,-soname,$(project_name).so.$(majorVersion)
 
 CC := gcc-3.4

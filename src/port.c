@@ -10,52 +10,87 @@
 #include <termios.h> /* управление POSIX терминалом */
 #include <sys/time.h>
 #include <sys/select.h>
+#include <errno.h>
 
 #include "rs232.h"
 #include "uint8_array.h"
 #include "port.h"
 
 
-// открыть порт
-static
-int __port_open ( askue_port_t *Port )
+// обработчик прерывания по сигналу от таймера
+static 
+void alarm_handler(int signo) { ; }
+
+// перевод милисекунд
+static 
+struct timeval msec_to_timeval ( long int _msec_timeout )
 {
-    Port->In = fdopen ( Port->RS232, "r" );
-    if ( Port->In == NULL )
-    {
-        return -1;
-    }
-    Port->Out = fdopen ( Port->RS232, "w" );
-    if ( Port->Out == NULL )
-    {
-        fclose ( Port->In );
-        return -1;
-    }
-    return 0;
+	ldiv_t raw = ldiv ( _msec_timeout, 1000 );
+	return ( struct timeval ) { .tv_sec = raw.quot, .tv_usec = raw.rem * 1000 };
 }
 
-// закрыть порт
-static
-int __port_close ( askue_port_t *Port )
+// запуск таймера
+static 
+int start_reading_timer ( struct timeval TVal )
 {
-    if ( fclose ( Port->In ) )
-        return -1;
-    if ( fclose ( Port->Out ) )
-        return -1;
-    
-    return 0;
+	//назначить обработчик прерывания таймера
+	if( signal(SIGALRM, alarm_handler) == SIG_ERR )
+	{
+		return -1;
+	}
+	else
+	{
+		struct itimerval iTVal;
+		iTVal.it_interval.tv_sec = 0; //нет периода повторения
+		iTVal.it_interval.tv_usec = 0;
+		iTVal.it_value = TVal; //значение для отсчёта
+
+        return ( setitimer(ITIMER_REAL, &iTVal, NULL) < 0 ) ? -1 : 1;
+	}
+}
+
+// остановка таймера
+static 
+int stop_reading_timer ( void )
+{
+	// назначить обработчик прерывания таймера
+    struct itimerval iTVal;
+    // нет периода повторения
+    iTVal.it_interval.tv_sec = 0; 
+    iTVal.it_interval.tv_usec = 0;
+    // значение для отсчёта
+    iTVal.it_value.tv_sec = 0; 
+    iTVal.it_value.tv_usec = 0; 
+
+    return ( setitimer(ITIMER_REAL, &iTVal, NULL) < 0 ) ? -1 : 1;
+}
+
+// таймер "сгорел"
+static
+int is_fired ( struct itimerval *TVal )
+{
+    return (TVal->it_value.tv_sec == 0) && (TVal->it_value.tv_usec == 0);
+}
+
+// ошибка чтения
+static 
+int is_read_error ( int Ret )
+{
+    return ( Ret < 0 ) && ( errno != 0 );
+}
+
+// проверка сгорания таймера
+static 
+int is_fired_reading_timer( void )
+{
+	struct itimerval TVal;
+    return ( !getitimer(ITIMER_REAL, &TVal) ) ? is_fired ( &TVal ) : 0;
 }
 
 // закрыть порт
 int port_destroy ( askue_port_t *Port )
 {
-    if ( !__port_close ( Port ) )
-    {
-        close ( Port->RS232 );
-        return 0;
-    }
-    else
-        return -1;
+    return close ( Port->RS232 );
 }
 
 // настроить порт
@@ -78,17 +113,7 @@ int port_init ( askue_port_t *Port, const char *file, const char *speed, const c
         rs232_close ( RS232 );
         return -1;
     }
-    
-    Port->RS232 = RS232;
-    if ( __port_open ( Port ) )
-    {
-        close ( Port->RS232 );
-        return -1;
-    }
-    else
-    {
-        return 0;
-    }
+    return 0;
 }
 
 static
@@ -99,21 +124,14 @@ int __port_read ( const askue_port_t *Port, uint8_array_t *u8a )
     if( Amount > 0 ) //есть доступные символы
     {
         char Buffer[ Amount ];
-        if ( fread ( Buffer, sizeof ( char ), ( size_t ) Amount, Port->In ) == 0 )
+        int RetVal;
+        if ( ( RetVal = read ( Port->RS232, Buffer, ( size_t ) Amount ) ) <= 0 )
         {
-            if ( feof ( Port->In ) ||
-                 ferror ( Port->In ) )
-            {
-                return -1;
-            }
-            else
-            {
-                return 0;
-            }
+            return RetVal;
         }
         else
         {
-            uint8_array_update ( u8a, Buffer, Amount );
+            uint8_array_append ( u8a, Buffer, Amount );
             return Amount;
         }
     }
@@ -124,49 +142,36 @@ int __port_read ( const askue_port_t *Port, uint8_array_t *u8a )
 }
 
 // читать из порта
-int port_read ( const askue_port_t *Port, uint8_array_t *u8a, long int timeout )
+int port_read ( const askue_port_t *Port, uint8_array_t *u8a, long int timeout, size_t Amount )
 {
-    ldiv_t Sec = ldiv ( timeout, 1000 );
-    struct timeval Timeout = { Sec.quot, Sec.rem * 1000 };
-    
-    fd_set ReadSet;
-    FD_ZERO ( &ReadSet );
-    FD_SET ( Port->RS232, &ReadSet );
-
-    int RetVal = select( Port->RS232 + 1, &ReadSet, NULL, NULL, &Timeout);
-    
-    if ( RetVal == 0 )
+    if ( start_reading_timer ( msec_to_timeval ( timeout ) ) )
     {
-        return 0;
-    }
-    else if ( RetVal == -1 )
-    {
-        return -1;
+        int Ret;
+        
+        if ( Amount > 0 ) // есть слежение по кол-ву принятых байт
+            do {
+                Ret = __port_read ( Port, u8a );
+            } while ( !is_read_error ( Ret ) &&
+                       !is_fired_reading_timer () &&
+                       u8a->Size < Amount ); 
+        else // нет слежения по кол-ву принятых байт
+            do {
+                Ret = __port_read ( Port, u8a );
+            } while ( !is_read_error ( Ret ) &&
+                       !is_fired_reading_timer () );
+                        
+        stop_reading_timer ();       
+          
+        return Ret;
     }
     else
     {
-        assert ( FD_ISSET ( Port->RS232, &ReadSet ) );
-        return __port_read ( Port, u8a );
+        return 0;
     }
 }
 
 // писать в порт
 int port_write ( const askue_port_t *Port, const uint8_array_t *u8a )
 {
-    size_t wb = fwrite ( u8a->Item, sizeof ( uint8_t ), u8a->Size, Port->Out );
-    if ( wb == 0 )
-    {
-        if ( ferror ( Port->Out ) )
-        {
-            return -1;
-        }
-        else
-        {
-            return 0;
-        }
-    }
-    else 
-    {
-        return wb;
-    }
+    return write ( Port->RS232, u8a->Item, u8a->Size );
 }
