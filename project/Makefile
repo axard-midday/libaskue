@@ -4,7 +4,7 @@
 
 project_name := libaskue
 majorVersion := 2
-minorVersion := 0.3
+minorVersion := 0.14
 fullVersion := $(majorVersion).$(minorVersion)
 source_dirs := ../src
 dest_dir := ../bin

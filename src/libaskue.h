@@ -11,6 +11,9 @@
 #include <libaskue/bcd.h>
 #include <libaskue/port.h>
 #include <libaskue/cli.h>
+#include <libaskue/str2word.h>
+#include <libaskue/init.h>
+#include <libaskue/journal.h>
 #include <libaskue/types.h>
 #include <libaskue/byte_fu.h>
 

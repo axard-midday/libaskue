@@ -139,7 +139,7 @@ size_t get_need_arg_amount ( const cli_arg_t *Args )
     
     while ( !is_last_arg ( Args ) )
     {
-        if ( Args->ValNeed == CLI_REQUIRED_VAL )
+        if ( Args->ArgNeed == CLI_REQUIRED_ARG )
         {
             Result++;
         }
@@ -161,12 +161,23 @@ cli_result_t cli_parse ( cli_arg_t *Args, int argc, char** argv )
     while ( ( i < argc ) && ( Result == CLI_SUCCESS ) )
     {
         // найти аргумент
-        cli_arg_t *Arg = find_arg ( Args, argv[ i ] );
-        if ( Arg == NULL ) // ошибка поиска аргумента
+        cli_arg_t *Arg;
+        
+        switch ( get_argtype ( argv[ i ] ) )
         {
-            Result = CLI_ERROR_ARGTYPE;
+            case CLI_LONG_ARG:
+                Arg = find_arg_by_longname ( Args, argv[ i ] + 2 );
+                break;
+            case CLI_SHORT_ARG:
+                Arg = find_arg_by_shortname ( Args, argv[ i ][ 1 ] );
+                break;
+            default:
+                Arg = NULL;
+                Result = CLI_ERROR_ARGTYPE; // ошибка определения типа аргумента
+                break;
         }
-        else
+        
+        if ( Arg != NULL )
         {
             // аргумент обязателен
             if ( Arg->ArgNeed == CLI_REQUIRED_ARG )
@@ -190,7 +201,6 @@ cli_result_t cli_parse ( cli_arg_t *Args, int argc, char** argv )
                 Result = ( Arg->Handler ( Arg->Var, Val ) == 0 ) ? CLI_SUCCESS : CLI_ERROR_HANDLER;
             }
         }
-        
         i++;
     }
     

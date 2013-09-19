@@ -14,7 +14,8 @@
 
 #include "rs232.h"
 #include "uint8_array.h"
-#include "port.h"
+#include "types.h"
+#include "macro.h"
 
 
 // обработчик прерывания по сигналу от таймера
@@ -34,9 +35,9 @@ static
 int start_reading_timer ( struct timeval TVal )
 {
 	//назначить обработчик прерывания таймера
-	if( signal(SIGALRM, alarm_handler) == SIG_ERR )
+	if( signal ( SIGALRM, alarm_handler ) == SIG_ERR )
 	{
-		return -1;
+		return ASKUE_ERROR;
 	}
 	else
 	{
@@ -45,7 +46,7 @@ int start_reading_timer ( struct timeval TVal )
 		iTVal.it_interval.tv_usec = 0;
 		iTVal.it_value = TVal; //значение для отсчёта
 
-        return ( setitimer(ITIMER_REAL, &iTVal, NULL) < 0 ) ? -1 : 1;
+        return ( setitimer ( ITIMER_REAL, &iTVal, NULL ) < 0 ) ? ASKUE_ERROR : ASKUE_SUCCESS;
 	}
 }
 
@@ -62,7 +63,7 @@ int stop_reading_timer ( void )
     iTVal.it_value.tv_sec = 0; 
     iTVal.it_value.tv_usec = 0; 
 
-    return ( setitimer(ITIMER_REAL, &iTVal, NULL) < 0 ) ? -1 : 1;
+    return ( setitimer(ITIMER_REAL, &iTVal, NULL) < 0 ) ? ASKUE_ERROR : ASKUE_SUCCESS;
 }
 
 // таймер "сгорел"
@@ -88,19 +89,25 @@ int is_fired_reading_timer( void )
 }
 
 // закрыть порт
-int port_destroy ( askue_port_t *Port )
+int port_destroy ( a_port_t *Port )
 {
     return close ( Port->RS232 );
 }
 
 // настроить порт
-int port_init ( askue_port_t *Port, const char *file, const char *speed, const char *dbits, const char *sbits, const char *parity )
+int port_init ( a_port_t *Port, const char *file, const char *speed, const char *dbits, const char *sbits, const char *parity )
 {
     int RS232 = rs232_open ( file );
+    if ( RS232 == -1 )
+    {
+        return ASKUE_ERROR;
+    }
+    
     if ( rs232_init ( RS232, &( Port->Termios ) ) )
     {
         rs232_close ( RS232 );
-        return -1;
+        Port->RS232 = -1;
+        return ASKUE_ERROR;
     }
     
     rs232_set_databits ( &( Port->Termios ), dbits );
@@ -111,13 +118,17 @@ int port_init ( askue_port_t *Port, const char *file, const char *speed, const c
     if ( rs232_apply ( RS232, &( Port->Termios ) ) )
     {
         rs232_close ( RS232 );
-        return -1;
+        Port->RS232 = -1;
+        return ASKUE_ERROR;
     }
-    return 0;
+    
+    Port->RS232 = RS232;
+    
+    return ASKUE_SUCCESS;
 }
 
 static
-int __port_read ( const askue_port_t *Port, uint8_array_t *u8a )
+int __port_read ( const a_port_t *Port, uint8_array_t *u8a )
 {
     int Amount = 0;
     ioctl ( Port->RS232, FIONREAD, &Amount );
@@ -127,51 +138,53 @@ int __port_read ( const askue_port_t *Port, uint8_array_t *u8a )
         int RetVal;
         if ( ( RetVal = read ( Port->RS232, Buffer, ( size_t ) Amount ) ) <= 0 )
         {
-            return RetVal;
+            return ASKUE_ERROR;
         }
         else
         {
             uint8_array_append ( u8a, Buffer, Amount );
-            return Amount;
+            return RetVal;
         }
     }
     else
     {
-        return -1;
+        return ASKUE_SUCCESS;
     }
 }
 
 // читать из порта
-int port_read ( const askue_port_t *Port, uint8_array_t *u8a, long int timeout, size_t Amount )
+int port_read ( const a_port_t *Port, uint8_array_t *u8a, long int timeout, size_t Amount )
 {
-    if ( start_reading_timer ( msec_to_timeval ( timeout ) ) )
+    if ( start_reading_timer ( msec_to_timeval ( timeout ) ) == ASKUE_SUCCESS )
     {
-        int Ret;
-        
+        int Ret = 0;
+        int ReadAmount = 0;
         if ( Amount > 0 ) // есть слежение по кол-ву принятых байт
             do {
                 Ret = __port_read ( Port, u8a );
+                if ( Ret > 0 ) ReadAmount += Ret;
             } while ( !is_read_error ( Ret ) &&
                        !is_fired_reading_timer () &&
                        u8a->Size < Amount ); 
         else // нет слежения по кол-ву принятых байт
             do {
                 Ret = __port_read ( Port, u8a );
+                if ( Ret > 0 ) ReadAmount += Ret;
             } while ( !is_read_error ( Ret ) &&
                        !is_fired_reading_timer () );
                         
         stop_reading_timer ();       
           
-        return Ret;
+        return ReadAmount;
     }
     else
     {
-        return 0;
+        return ASKUE_ERROR;
     }
 }
 
 // писать в порт
-int port_write ( const askue_port_t *Port, const uint8_array_t *u8a )
+int port_write ( const a_port_t *Port, const uint8_array_t *u8a )
 {
     return write ( Port->RS232, u8a->Item, u8a->Size );
 }

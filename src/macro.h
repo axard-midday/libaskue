@@ -12,6 +12,8 @@
 // специальные буферы (без учёта конечного символа)
 #define TIME_STRBUF                 8
 #define DATE_STRBUF                 10
+#define _ASKUE_SQLBUFLEN            256
+#define _ASKUE_TBUFLEN              256
 
 /*
  * БУЛЕВСКИЕ КОНСТАНТЫ
